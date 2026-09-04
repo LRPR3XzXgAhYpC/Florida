@@ -139,19 +139,24 @@ jobs:
           # 明确拉取 17.17.0 对应 Tag
           git clone --depth 1 --branch 17.17.0 --recurse-submodules --shallow-submodules https://github.com/frida/frida
           cd frida
+          echo "Replacing frida:rpc strings..."
+          find subprojects/frida-core -type f \( -name "*.vala" -o -name "*.c" -o -name "*.h" \) -exec sed -i 's/"frida:rpc"/"florida:rpc"/g' {} +
+          find subprojects/frida-core -type f \( -name "*.vala" -o -name "*.c" -o -name "*.h" \) -exec sed -i 's/'\''frida:rpc'\''/'\''florida:rpc'\''/g' {} +
+
+          # 2. 如果还有其他模块的 patch（如 frida-gum 等），继续应用其他补丁
           for path in ../patches/*
           do
             name=$(basename $path)
-            real=$(realpath $path)
-            echo "Apply patches in $real to frida/subprojects/$name"
-            cd subprojects/$name
-            # 使用 -3 智能对齐，若冲突则尝试 whitespace=fix 模式兜底
-            git am -3 ../../../patches/$name/*.patch || {
-              echo "git am -3 failed, trying git apply fallback..."
-              git am --abort || true
-              git apply --reject --whitespace=fix ../../../patches/$name/*.patch || true
-            }
-            cd ../..
+            if [ -d "subprojects/$name" ] && [ -d "$path" ]; then
+              echo "Apply patches to frida/subprojects/$name"
+              cd subprojects/$name
+              for patchfile in ../../../patches/$name/*.patch; do
+                if [ -f "$patchfile" ]; then
+                  git apply --ignore-whitespace "$patchfile" || true
+                fi
+              done
+              cd ../..
+            fi
           done
           cd ..
           
